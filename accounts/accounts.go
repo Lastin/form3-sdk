@@ -5,20 +5,31 @@ import (
 	form3_sdk "github.com/Lastin/form3-sdk"
 )
 
-type Create struct {
-	Data struct {
-		Attributes     *Account `json:"attributes"`
-		CreatedOn      *string  `json:"created_on"`
-		Id             *string
-		ModifiedOn     *string `json:"modified_on"`
-		OrganisationId *string `json:"organisation_id"`
-		Type           *string
-		Version        int
-	} `json:"data"`
-	Links map[string]*string `json:"links"`
+type AccountData struct {
+	Attributes     *Account `json:"attributes"`
+	CreatedOn      *string  `json:"created_on"`
+	Id             *string
+	ModifiedOn     *string `json:"modified_on"`
+	OrganisationId *string `json:"organisation_id"`
+	Type           *string
+	Version        int
 }
 
-type Fetch struct {
+type Create struct {
+	Data  *AccountData
+	Links Links
+}
+
+type Links struct {
+	First *string
+	Last  *string
+	Next  *string
+	Self  *string
+}
+
+type List struct {
+	Data  []*AccountData
+	Links *Links
 }
 
 type Account struct {
@@ -75,6 +86,7 @@ func New(config form3_sdk.SessionCofig) Accounts {
 const (
 	createPath = "v1/organisation/accounts"
 	fetchPath  = "v1/organisation/accounts"
+	listPath   = "v1/organisation/accounts"
 )
 const MsgType = "accounts"
 
@@ -99,5 +111,24 @@ func (client Accounts) Fetch(id string) (result *Create, err error) {
 	return
 }
 
-func List()   {}
+func (client Accounts) List(pageNumber, pageSize int, filter Account) (result *List, err error) {
+	var data []byte
+	if data, err = client.sdkClient.List(listPath, pageNumber, pageSize, filter); err == nil {
+		result = new(List)
+		err = json.Unmarshal(data, result)
+	}
+	return
+}
+
 func Delete() {}
+
+func (client Accounts) Next(list *List) (result *List, err error) {
+	if list.Links.Next != nil {
+		var data []byte
+		if data, err = client.sdkClient.RawGet(*list.Links.Next); err == nil {
+			result = new(List)
+			err = json.Unmarshal(data, result)
+		}
+	}
+	return
+}

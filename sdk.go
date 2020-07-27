@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"io/ioutil"
 	"net/http"
+	"reflect"
 )
 
 type SessionCofig struct {
@@ -16,7 +17,8 @@ type SessionCofig struct {
 }
 
 type SdkClient struct {
-	config SessionCofig
+	httpClient http.Client
+	config     SessionCofig
 }
 
 func New(config SessionCofig) *SdkClient {
@@ -62,9 +64,54 @@ func (client SdkClient) Create(path string, msgType string, attributes json.RawM
 }
 
 func (client SdkClient) Fetch(path, id string) (respB []byte, err error) {
-	url := fmt.Sprintf("%s/%s/%s", *client.config.ApiHost, path, id)
+	return client.RawGet(fmt.Sprintf("%s/%s", path, id))
+}
+
+func buildFilter(i interface{}) string {
+	if i == nil {
+		return ""
+	}
+	var buf bytes.Buffer
+	v := reflect.ValueOf(i)
+	for j := 0; j < v.NumField(); j++ {
+		if v.Field(j).IsValid() && !v.Field(j).IsZero() {
+			jsonTagName := v.Type().Field(j).Tag.Get("json")
+			if len(jsonTagName) > 0 {
+				buf.WriteString(fmt.Sprintf("&filter[%s]=%v", jsonTagName, reflect.Indirect(v.Field(j)).Interface()))
+			}
+
+		}
+	}
+	return buf.String()
+}
+
+func (client SdkClient) List(path string, pageNumber, pageSize int, filter interface{}) (respB []byte, err error) {
+	//v1/organisation/accounts?page[number]={page_number}&page[size]={page_size}&filter[{attribute}]={filter_value}
+	filters := buildFilter(filter)
+	return client.RawGet(fmt.Sprintf("%s?page[number]=%d&page[size]=%d%s", path, pageNumber, pageSize, filters))
+}
+
+func (client SdkClient) RawGet(path string) (respB []byte, err error) {
+	var req *http.Request
+	url := fmt.Sprintf("%s/%s", *client.config.ApiHost, path)
+	if req, err = http.NewRequest("GET", url, nil); err == nil {
+		return client.Do(req)
+	}
+	return
+}
+
+func (client SdkClient) Delete(path, id string, version int) (respB []byte, err error) {
+	url := fmt.Sprintf("%s/%s/%s?version=%d", *client.config.ApiHost, path, id, version)
+	var req *http.Request
+	if req, err = http.NewRequest("DELETE", url, nil); err == nil {
+		return client.Do(req)
+	}
+	return
+}
+
+func (client SdkClient) Do(req *http.Request) (respB []byte, err error) {
 	var resp *http.Response
-	if resp, err = http.Get(url); err == nil {
+	if resp, err = client.httpClient.Do(req); err == nil {
 		respB, err = ioutil.ReadAll(resp.Body)
 	}
 	return

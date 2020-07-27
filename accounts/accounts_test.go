@@ -110,3 +110,23 @@ func TestAccounts_Fetch(t *testing.T) {
 		SecondaryIdentification: a1.SecondaryIdentification,
 	}, result.Data.Attributes)
 }
+
+func TestAccounts_List(t *testing.T) {
+	client := New(form3_sdk.SessionCofig{})
+	tests := []struct {
+		name       string
+		pageNumber int
+		pageSize   int
+	}{
+		{"one", 0, 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := client.List(tt.pageNumber, tt.pageSize, Account{
+				AccountNumber: aws.String("41426819"),
+			})
+			assert.NoError(t, err)
+			//list.Next()
+		})
+	}
+}
