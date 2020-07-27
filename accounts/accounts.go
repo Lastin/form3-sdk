@@ -5,6 +5,22 @@ import (
 	form3_sdk "github.com/Lastin/form3-sdk"
 )
 
+type Create struct {
+	Data struct {
+		Attributes     *Account `json:"attributes"`
+		CreatedOn      *string  `json:"created_on"`
+		Id             *string
+		ModifiedOn     *string `json:"modified_on"`
+		OrganisationId *string `json:"organisation_id"`
+		Type           *string
+		Version        int
+	} `json:"data"`
+	Links map[string]*string `json:"links"`
+}
+
+type Fetch struct {
+}
+
 type Account struct {
 	Country                    *string
 	BaseCurrency               *string `json:"base_currency"`
@@ -56,29 +72,32 @@ func New(config form3_sdk.SessionCofig) Accounts {
 	return Accounts{sdkClient: sdkClient}
 }
 
-func processResponse(resp []byte) (*Account, error) {
-	account := new(Account)
-	if err := json.Unmarshal(resp, account); err != nil {
-		return nil, err
-	}
-	return account, nil
-}
-
-const path = "v1/organisation/accounts"
+const (
+	createPath = "v1/organisation/accounts"
+	fetchPath  = "v1/organisation/accounts"
+)
 const MsgType = "accounts"
 
-func (client Accounts) Create(account *Account) (*Account, error) {
-	if accountB, err := json.Marshal(account); err != nil {
-		return nil, err
-	} else {
-		resp, err := client.sdkClient.Create(path, MsgType, accountB)
-		if err != nil {
-			return nil, err
+func (client Accounts) Create(account *Account) (result *Create, err error) {
+	var reqB []byte
+	if reqB, err = json.Marshal(account); err == nil {
+		var respB []byte
+		if respB, err = client.sdkClient.Create(createPath, MsgType, reqB); err == nil {
+			result = new(Create)
+			err = json.Unmarshal(respB, result)
 		}
-		return processResponse(resp.Attributes)
 	}
+	return
 }
 
-func Fetch()  {}
+func (client Accounts) Fetch(id string) (result *Create, err error) {
+	data, err := client.sdkClient.Fetch(fetchPath, id)
+	if err == nil {
+		result = new(Create)
+		err = json.Unmarshal(data, result)
+	}
+	return
+}
+
 func List()   {}
 func Delete() {}
