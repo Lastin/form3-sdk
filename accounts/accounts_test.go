@@ -6,6 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
+	"strconv"
 	"testing"
 )
 
@@ -113,20 +114,155 @@ func TestAccounts_Fetch(t *testing.T) {
 
 func TestAccounts_List(t *testing.T) {
 	client := New(form3_sdk.SessionCofig{})
+	DeleteAll(t, client)
+	CreateBunch(t, 200)
+	/*
+		This is for validating if filter works.
+			checkFilter := func(list *List, expectedA Account) {
+				for _, actualA := range list.Data {
+					if expectedA.BankId != nil {
+						assert.EqualValues(t, *expectedA.BankId, *actualA.Attributes.BankId)
+					}
+					if expectedA.AccountNumber != nil {
+						assert.EqualValues(t, *expectedA.AccountNumber, *actualA.Attributes.AccountNumber)
+					}
+				}
+			}
+	*/
 	tests := []struct {
 		name       string
 		pageNumber int
 		pageSize   int
+		filter     Account
 	}{
-		{"one", 0, 10},
+		{"no filter", 0, 10, Account{}},
+		{"filter by account number", 0, 10, Account{AccountNumber: aws.String("41426819")}},
+		{"filter by account number", 0, 100, Account{AccountNumber: aws.String("41426819")}},
+		//{"filter by bank id", 0, 10, Account{BankId: aws.String("2")}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := client.List(tt.pageNumber, tt.pageSize, Account{
-				AccountNumber: aws.String("41426819"),
-			})
+			list, err := client.List(tt.pageNumber, tt.pageSize, tt.filter)
 			assert.NoError(t, err)
-			//list.Next()
+			assert.True(t, len(list.Data) <= tt.pageSize)
+			//checkFilter(list, tt.filter)
+			for list.HasNext() {
+				list, err = list.Next()
+				assert.NoError(t, err)
+				assert.True(t, len(list.Data) <= tt.pageSize)
+				//checkFilter(list, tt.filter)
+			}
 		})
+	}
+}
+
+func CreateBunch(t *testing.T, count int) {
+	client := New(form3_sdk.SessionCofig{})
+	for i := 0; i < count; i++ {
+		_, err := client.Create(&Account{
+			Country:                 a1.Country,
+			BaseCurrency:            a1.BaseCurrency,
+			AccountNumber:           aws.String(strconv.Itoa(i)),
+			BankId:                  a1.BankId,
+			BankIdCode:              a1.BankIdCode,
+			Bic:                     a1.Bic,
+			IBan:                    a1.IBan,
+			AccountClassification:   a1.AccountClassification,
+			JointAccount:            a1.JointAccount,
+			AccountMatchingOptOut:   a1.AccountMatchingOptOut,
+			SecondaryIdentification: a1.SecondaryIdentification,
+		})
+		assert.NoError(t, err)
+	}
+	/* This was implemented for testing filter, which clearly doesn't filter
+	one := aws.String("41426819")
+	two := aws.String("41426820")
+	for _, v := range []struct {
+		accountNumber *string
+		bankId        *string
+	}{
+		{one, one},
+		{one, two},
+		{two, one},
+		{two, two},
+	} {
+		_, err := client.Create(&Account{
+			Country:                 a1.Country,
+			BaseCurrency:            a1.BaseCurrency,
+			AccountNumber:           v.accountNumber,
+			BankId:                  v.bankId,
+			BankIdCode:              a1.BankIdCode,
+			Bic:                     a1.Bic,
+			IBan:                    a1.IBan,
+			AccountClassification:   a1.AccountClassification,
+			JointAccount:            a1.JointAccount,
+			AccountMatchingOptOut:   a1.AccountMatchingOptOut,
+			SecondaryIdentification: a1.SecondaryIdentification,
+		})
+		assert.NoError(t, err)
+	}
+	*/
+}
+
+func Test_Delete(t *testing.T) {
+	client := New(form3_sdk.SessionCofig{})
+	//prepare for test
+	DeleteAll(t, client)
+	result, err := client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	assert.Len(t, result.Data, 0)
+	//add an account
+	createResult, err := client.Create(a1)
+	assert.NoError(t, err)
+	fetchResult, err := client.Fetch(*createResult.Data.Id)
+	assert.NoError(t, err)
+	assert.EqualValues(t, &Account{
+		Country:                 a1.Country,
+		BaseCurrency:            a1.BaseCurrency,
+		AccountNumber:           a1.AccountNumber,
+		BankId:                  a1.BankId,
+		BankIdCode:              a1.BankIdCode,
+		Bic:                     a1.Bic,
+		IBan:                    a1.IBan,
+		AccountClassification:   a1.AccountClassification,
+		JointAccount:            a1.JointAccount,
+		AccountMatchingOptOut:   a1.AccountMatchingOptOut,
+		SecondaryIdentification: a1.SecondaryIdentification,
+	}, fetchResult.Data.Attributes)
+	success, err := client.Delete(*fetchResult.Data.Id, fetchResult.Data.Version)
+	assert.NoError(t, err)
+	assert.True(t, success)
+	fetchResult, err = client.Fetch("*createResult.Data.Id")
+	assert.NoError(t, err)
+}
+
+func Test_DeleteAll(t *testing.T) {
+	client := New(form3_sdk.SessionCofig{})
+	DeleteAll(t, client)
+	CreateBunch(t, 200)
+	result, err := client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	assert.Len(t, result.Data, 100)
+	DeleteAll(t, client)
+	result, err = client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	assert.Len(t, result.Data, 0)
+}
+
+func DeleteAll(t *testing.T, client Accounts) {
+	deleteEach := func(list *List) {
+		for _, account := range list.Data {
+			success, err := client.Delete(*account.Id, account.Version)
+			assert.NoError(t, err)
+			assert.True(t, success)
+		}
+	}
+	list, err := client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	deleteEach(list)
+	for list.HasNext() {
+		list, err = list.Next()
+		assert.NoError(t, err)
+		deleteEach(list)
 	}
 }

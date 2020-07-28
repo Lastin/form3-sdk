@@ -28,8 +28,9 @@ type Links struct {
 }
 
 type List struct {
-	Data  []*AccountData
-	Links *Links
+	sdkClient *form3_sdk.SdkClient
+	Data      []*AccountData
+	Links     *Links
 }
 
 type Account struct {
@@ -87,6 +88,7 @@ const (
 	createPath = "v1/organisation/accounts"
 	fetchPath  = "v1/organisation/accounts"
 	listPath   = "v1/organisation/accounts"
+	deletePath = "v1/organisation/accounts"
 )
 const MsgType = "accounts"
 
@@ -115,20 +117,28 @@ func (client Accounts) List(pageNumber, pageSize int, filter Account) (result *L
 	var data []byte
 	if data, err = client.sdkClient.List(listPath, pageNumber, pageSize, filter); err == nil {
 		result = new(List)
+		result.sdkClient = client.sdkClient
 		err = json.Unmarshal(data, result)
 	}
 	return
 }
 
-func Delete() {}
-
-func (client Accounts) Next(list *List) (result *List, err error) {
-	if list.Links.Next != nil {
+func (list List) Next() (result *List, err error) {
+	if list.HasNext() {
 		var data []byte
-		if data, err = client.sdkClient.RawGet(*list.Links.Next); err == nil {
+		if data, err = list.sdkClient.GetPath(*list.Links.Next); err == nil {
 			result = new(List)
+			result.sdkClient = list.sdkClient
 			err = json.Unmarshal(data, result)
 		}
 	}
 	return
+}
+
+func (list List) HasNext() bool {
+	return list.Links != nil && list.Links.Next != nil
+}
+
+func (client Accounts) Delete(id string, version int) (bool, error) {
+	return client.sdkClient.Delete(deletePath, id, version)
 }
