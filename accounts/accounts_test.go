@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"encoding/json"
+	"fmt"
 	form3_sdk "github.com/Lastin/form3-sdk"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
@@ -35,11 +36,13 @@ var a1 = &Account{
 	},
 	OrganisationIdentification: OrganisationIdentification{
 		Identification: aws.String("123654"),
-		Actors: []*Actor{&Actor{
-			Name:      []*string{aws.String("Jeff Page")},
-			BirthDate: aws.String("1970-01-01"),
-			Residency: aws.String("GB"),
-		}},
+		Actors: []*Actor{
+			{
+				Name:      []*string{aws.String("Jeff Page")},
+				BirthDate: aws.String("1970-01-01"),
+				Residency: aws.String("GB"),
+			},
+		},
 		Address: []*string{aws.String("10 Avenue des Champs")},
 		City:    aws.String("London"),
 		Country: aws.String("GB"),
@@ -74,6 +77,7 @@ func Test_JSONUnmarshal(t *testing.T) {
 	}
 }
 
+// Tests creating of the account
 func Test_Create(t *testing.T) {
 	result, err := New(form3_sdk.SessionCofig{}).Create(a1)
 	assert.NoError(t, err)
@@ -92,6 +96,7 @@ func Test_Create(t *testing.T) {
 	}, result.Data.Attributes)
 }
 
+// Tests fetching of a freshly created account
 func TestAccounts_Fetch(t *testing.T) {
 	result, err := New(form3_sdk.SessionCofig{}).Create(a1)
 	assert.NoError(t, err)
@@ -112,50 +117,111 @@ func TestAccounts_Fetch(t *testing.T) {
 	}, result.Data.Attributes)
 }
 
+// Tests getting a list of accounts
 func TestAccounts_List(t *testing.T) {
 	client := New(form3_sdk.SessionCofig{})
 	DeleteAll(t, client)
-	CreateBunch(t, 200)
-	/*
-		This is for validating if filter works.
-			checkFilter := func(list *List, expectedA Account) {
-				for _, actualA := range list.Data {
-					if expectedA.BankId != nil {
-						assert.EqualValues(t, *expectedA.BankId, *actualA.Attributes.BankId)
-					}
-					if expectedA.AccountNumber != nil {
-						assert.EqualValues(t, *expectedA.AccountNumber, *actualA.Attributes.AccountNumber)
-					}
-				}
+	CreateBunch(t, 250)
+	/* This is for validating if filter works.
+	checkFilter := func (list *List, expectedA Account) {
+		for _, actualA := range list.Data {
+			if expectedA.BankId != nil {
+				assert.EqualValues(t, *expectedA.BankId, *actualA.Attributes.BankId)
 			}
+			if expectedA.AccountNumber != nil {
+				assert.EqualValues(t, *expectedA.AccountNumber, *actualA.Attributes.AccountNumber)
+			}
+		}
+	}
 	*/
 	tests := []struct {
-		name       string
-		pageNumber int
-		pageSize   int
-		filter     Account
+		name            string
+		startPageNumber int
+		pageSize        int
+		filter          Account
 	}{
+		//{"filter by account number", 0, 10, Account{AccountNumber: aws.String("41426819")}},
 		{"no filter", 0, 10, Account{}},
-		{"filter by account number", 0, 10, Account{AccountNumber: aws.String("41426819")}},
-		{"filter by account number", 0, 100, Account{AccountNumber: aws.String("41426819")}},
-		//{"filter by bank id", 0, 10, Account{BankId: aws.String("2")}},
+		{"page size 10", 0, 10, Account{}},
+		{"page size 20", 0, 20, Account{}},
+		{"starting page 2 and page size 20", 1, 20, Account{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			list, err := client.List(tt.pageNumber, tt.pageSize, tt.filter)
+			pageNumber := tt.startPageNumber
+			list, err := client.List(pageNumber, tt.pageSize, tt.filter)
 			assert.NoError(t, err)
-			assert.True(t, len(list.Data) <= tt.pageSize)
+			assert.LessOrEqual(t, len(list.Data), tt.pageSize)
+			for i, each := range list.Data {
+				expectedAccountNumber := strconv.Itoa(i + (tt.pageSize * pageNumber))
+				assert.Equal(t, expectedAccountNumber, *each.Attributes.AccountNumber)
+			}
 			//checkFilter(list, tt.filter)
 			for list.HasNext() {
-				list, err = list.Next()
+				pageNumber++
+				list, err = client.List(pageNumber, tt.pageSize, tt.filter)
 				assert.NoError(t, err)
-				assert.True(t, len(list.Data) <= tt.pageSize)
+				assert.LessOrEqual(t, len(list.Data), tt.pageSize)
+				for i, each := range list.Data {
+					expectedAccountNumber := strconv.Itoa(i + (tt.pageSize * pageNumber))
+					assert.Equal(t, expectedAccountNumber, *each.Attributes.AccountNumber)
+				}
 				//checkFilter(list, tt.filter)
 			}
 		})
 	}
 }
 
+// Test walking of the list until the end
+func TestList_Walk(t *testing.T) {
+	client := New(form3_sdk.SessionCofig{})
+	DeleteAll(t, client)
+	CreateBunch(t, 250)
+	list, err := client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	total := 0
+	err = list.Walk(func(_ int, accountData *AccountData) error {
+		total++
+		return nil
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, 250, total)
+}
+
+func Test_Delete(t *testing.T) {
+	client := New(form3_sdk.SessionCofig{})
+	DeleteAll(t, client)
+	result, err := client.List(0, 100, Account{})
+	assert.NoError(t, err)
+	assert.Len(t, result.Data, 0)
+	// add an account
+	createResult, err := client.Create(a1)
+	assert.NoError(t, err)
+	fetchResult, err := client.Fetch(*createResult.Data.Id)
+	assert.NoError(t, err)
+	// assert account exists
+	assert.EqualValues(t, &Account{
+		Country:                 a1.Country,
+		BaseCurrency:            a1.BaseCurrency,
+		AccountNumber:           a1.AccountNumber,
+		BankId:                  a1.BankId,
+		BankIdCode:              a1.BankIdCode,
+		Bic:                     a1.Bic,
+		IBan:                    a1.IBan,
+		AccountClassification:   a1.AccountClassification,
+		JointAccount:            a1.JointAccount,
+		AccountMatchingOptOut:   a1.AccountMatchingOptOut,
+		SecondaryIdentification: a1.SecondaryIdentification,
+	}, fetchResult.Data.Attributes)
+	// now delete and check
+	success, err := client.Delete(*fetchResult.Data.Id, fetchResult.Data.Version)
+	assert.NoError(t, err)
+	assert.True(t, success)
+	fetchResult, err = client.Fetch("*createResult.Data.Id")
+	assert.NoError(t, err)
+}
+
+// Helper func for creating desired number of dummy accounts with incremental Ids
 func CreateBunch(t *testing.T, count int) {
 	client := New(form3_sdk.SessionCofig{})
 	for i := 0; i < count; i++ {
@@ -204,65 +270,28 @@ func CreateBunch(t *testing.T, count int) {
 	*/
 }
 
-func Test_Delete(t *testing.T) {
-	client := New(form3_sdk.SessionCofig{})
-	//prepare for test
-	DeleteAll(t, client)
-	result, err := client.List(0, 100, Account{})
-	assert.NoError(t, err)
-	assert.Len(t, result.Data, 0)
-	//add an account
-	createResult, err := client.Create(a1)
-	assert.NoError(t, err)
-	fetchResult, err := client.Fetch(*createResult.Data.Id)
-	assert.NoError(t, err)
-	assert.EqualValues(t, &Account{
-		Country:                 a1.Country,
-		BaseCurrency:            a1.BaseCurrency,
-		AccountNumber:           a1.AccountNumber,
-		BankId:                  a1.BankId,
-		BankIdCode:              a1.BankIdCode,
-		Bic:                     a1.Bic,
-		IBan:                    a1.IBan,
-		AccountClassification:   a1.AccountClassification,
-		JointAccount:            a1.JointAccount,
-		AccountMatchingOptOut:   a1.AccountMatchingOptOut,
-		SecondaryIdentification: a1.SecondaryIdentification,
-	}, fetchResult.Data.Attributes)
-	success, err := client.Delete(*fetchResult.Data.Id, fetchResult.Data.Version)
-	assert.NoError(t, err)
-	assert.True(t, success)
-	fetchResult, err = client.Fetch("*createResult.Data.Id")
-	assert.NoError(t, err)
-}
+/* Helper function for clearing the accounts
+Actually pagination is not working correctly at backend, as proven in given scenario:
+- add 250 accounts
+- query first 100
+- delete first 100
+- use provided link to query next 100
+- we delete next 100
+- use provided link to query next 100 (50 left in this case), and we get empty list because our accounts shifted left
 
-func Test_DeleteAll(t *testing.T) {
-	client := New(form3_sdk.SessionCofig{})
-	DeleteAll(t, client)
-	CreateBunch(t, 200)
-	result, err := client.List(0, 100, Account{})
-	assert.NoError(t, err)
-	assert.Len(t, result.Data, 100)
-	DeleteAll(t, client)
-	result, err = client.List(0, 100, Account{})
-	assert.NoError(t, err)
-	assert.Len(t, result.Data, 0)
-}
-
+Therefore here we keep querying first page all the time
+*/
 func DeleteAll(t *testing.T, client Accounts) {
-	deleteEach := func(list *List) {
-		for _, account := range list.Data {
-			success, err := client.Delete(*account.Id, account.Version)
-			assert.NoError(t, err)
-			assert.True(t, success)
-		}
+	count := 0
+	deleteFunc := func(_ int, accountData *AccountData) error {
+		success, err := client.Delete(*accountData.Id, accountData.Version)
+		assert.True(t, success)
+		count++
+		return err
 	}
-	list, err := client.List(0, 100, Account{})
-	assert.NoError(t, err)
-	deleteEach(list)
-	for list.HasNext() {
-		list, err = list.Next()
+	for list, err := client.List(0, 100, Account{}); err == nil && len(list.Data) > 0; list, err = list.First() {
+		err = list.Iterate(deleteFunc)
 		assert.NoError(t, err)
-		deleteEach(list)
 	}
+	fmt.Println("deleted", count)
 }

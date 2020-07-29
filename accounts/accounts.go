@@ -123,20 +123,58 @@ func (client Accounts) List(pageNumber, pageSize int, filter Account) (result *L
 	return
 }
 
-func (list List) Next() (result *List, err error) {
+func (list List) First() (first *List, err error) {
+	first = new(List)
+	first.sdkClient = list.sdkClient
+	var data []byte
+	if data, err = list.sdkClient.GetPath(*list.Links.First); err == nil {
+		err = json.Unmarshal(data, first)
+	}
+	return
+}
+
+func (list List) Next() (next *List, err error) {
+	next = new(List)
+	next.sdkClient = list.sdkClient
 	if list.HasNext() {
 		var data []byte
 		if data, err = list.sdkClient.GetPath(*list.Links.Next); err == nil {
-			result = new(List)
-			result.sdkClient = list.sdkClient
-			err = json.Unmarshal(data, result)
+			err = json.Unmarshal(data, next)
+		}
+	} else {
+		next = new(List)
+	}
+	return
+}
+
+func (list *List) HasNext() bool {
+	return list.Links != nil && list.Links.Next != nil
+}
+
+type IteratorFunc func(i int, data *AccountData) error
+
+func (list *List) Iterate(f IteratorFunc) (err error) {
+	for i, account := range list.Data {
+		if err = f(i, account); err != nil {
+			return
 		}
 	}
 	return
 }
 
-func (list List) HasNext() bool {
-	return list.Links != nil && list.Links.Next != nil
+func (list *List) Walk(f IteratorFunc) (err error) {
+	if err = list.Iterate(f); err != nil {
+		return
+	}
+	for list.HasNext() {
+		if list, err = list.Next(); err != nil {
+			return
+		}
+		if err = list.Iterate(f); err != nil {
+			return
+		}
+	}
+	return
 }
 
 func (client Accounts) Delete(id string, version int) (bool, error) {
