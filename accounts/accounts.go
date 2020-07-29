@@ -2,9 +2,29 @@ package accounts
 
 import (
 	"encoding/json"
-	form3_sdk "github.com/Lastin/form3-sdk"
+	form3Sdk "github.com/Lastin/form3-sdk"
 )
 
+const (
+	apiPath = "v1/organisation/accounts"
+	MsgType = "accounts"
+)
+
+// Root struct of this package. Provides range of functions to interact with accounts API
+type Accounts struct {
+	sdkClient *form3Sdk.SdkClient
+}
+
+// Represents type of function that needs to be provided to the iterator
+type IteratorFunc func(i int, data *AccountData) error
+
+// Represents the response received from the API
+type AccountsResponse struct {
+	Data  *AccountData
+	Links Links
+}
+
+// Represents the data segment of the AccountsResponse. It is expected to be generic across other API endpoints
 type AccountData struct {
 	Attributes     *Account `json:"attributes"`
 	CreatedOn      *string  `json:"created_on"`
@@ -15,11 +35,7 @@ type AccountData struct {
 	Version        int
 }
 
-type Create struct {
-	Data  *AccountData
-	Links Links
-}
-
+// Represents structure of Links element of AccountsResponse. Provides easy access to pagination function
 type Links struct {
 	First *string
 	Last  *string
@@ -27,12 +43,15 @@ type Links struct {
 	Self  *string
 }
 
+// Represents response received by the API when fetching list of accounts
+// Also carries pointer to instance of *form3_sdk.SdkClient used by Next() and First() functions
 type List struct {
-	sdkClient *form3_sdk.SdkClient
+	sdkClient *form3Sdk.SdkClient
 	Data      []*AccountData
 	Links     *Links
 }
 
+// Represents actual Account data provided in the "Attributes" field of the AccountsResponse
 type Account struct {
 	Country                    *string
 	BaseCurrency               *string `json:"base_currency"`
@@ -52,6 +71,7 @@ type Account struct {
 	OrganisationIdentification OrganisationIdentification `json:"organisation_identification"`
 }
 
+// Represents the structure element "PrivateIdentification" of Account structure
 type PrivateIdentification struct {
 	BirthDate      *string `json:"birth_date"`
 	BirthCountry   *string `json:"birth_country"`
@@ -61,6 +81,7 @@ type PrivateIdentification struct {
 	Country        *string
 }
 
+// Represents the structure element "OrganisationIdentification" of Account structure
 type OrganisationIdentification struct {
 	Identification *string
 	Actors         []*Actor
@@ -69,53 +90,48 @@ type OrganisationIdentification struct {
 	Country        *string
 }
 
+// Represents the structure element "Actor" of OrganisationIdentification structure
 type Actor struct {
 	Name      []*string
 	BirthDate *string `json:"birth_date"`
 	Residency *string
 }
 
-type Accounts struct {
-	sdkClient *form3_sdk.SdkClient
+// Creates a new instance of Accounts which carries instance of form3_sdk.SdkClient with config as provided in the argument
+func New(config form3Sdk.SessionCofig) *Accounts {
+	sdkClient := form3Sdk.New(config)
+	return &Accounts{sdkClient: sdkClient}
 }
 
-func New(config form3_sdk.SessionCofig) Accounts {
-	sdkClient := form3_sdk.New(config)
-	return Accounts{sdkClient: sdkClient}
-}
-
-const (
-	createPath = "v1/organisation/accounts"
-	fetchPath  = "v1/organisation/accounts"
-	listPath   = "v1/organisation/accounts"
-	deletePath = "v1/organisation/accounts"
-)
-const MsgType = "accounts"
-
-func (client Accounts) Create(account *Account) (result *Create, err error) {
+// Sends request to create an account reflecting provided account object
+// On success the returned data is populated into AccountsResponse
+func (client Accounts) Create(account *Account) (result *AccountsResponse, err error) {
 	var reqB []byte
 	if reqB, err = json.Marshal(account); err == nil {
 		var respB []byte
-		if respB, err = client.sdkClient.Create(createPath, MsgType, reqB); err == nil {
-			result = new(Create)
+		if respB, err = client.sdkClient.Create(apiPath, MsgType, reqB); err == nil {
+			result = new(AccountsResponse)
 			err = json.Unmarshal(respB, result)
 		}
 	}
 	return
 }
 
-func (client Accounts) Fetch(id string) (result *Create, err error) {
-	data, err := client.sdkClient.Fetch(fetchPath, id)
+// Fetches single account data with given account id
+func (client Accounts) Fetch(id string) (result *AccountsResponse, err error) {
+	data, err := client.sdkClient.Fetch(apiPath, id)
 	if err == nil {
-		result = new(Create)
+		result = new(AccountsResponse)
 		err = json.Unmarshal(data, result)
 	}
 	return
 }
 
+// Fetches and returns list of accounts, where page number and it's size are as provided
+// Also can filter by given account attributes
 func (client Accounts) List(pageNumber, pageSize int, filter Account) (result *List, err error) {
 	var data []byte
-	if data, err = client.sdkClient.List(listPath, pageNumber, pageSize, filter); err == nil {
+	if data, err = client.sdkClient.List(apiPath, pageNumber, pageSize, filter); err == nil {
 		result = new(List)
 		result.sdkClient = client.sdkClient
 		err = json.Unmarshal(data, result)
@@ -123,6 +139,7 @@ func (client Accounts) List(pageNumber, pageSize int, filter Account) (result *L
 	return
 }
 
+// Fetches and returns first page of the list
 func (list List) First() (first *List, err error) {
 	first = new(List)
 	first.sdkClient = list.sdkClient
@@ -133,6 +150,7 @@ func (list List) First() (first *List, err error) {
 	return
 }
 
+// Fetches and returns the next page of the list
 func (list List) Next() (next *List, err error) {
 	next = new(List)
 	next.sdkClient = list.sdkClient
@@ -147,11 +165,10 @@ func (list List) Next() (next *List, err error) {
 	return
 }
 
+// Returns true if the list has link to next page
 func (list *List) HasNext() bool {
 	return list.Links != nil && list.Links.Next != nil
 }
-
-type IteratorFunc func(i int, data *AccountData) error
 
 func (list *List) Iterate(f IteratorFunc) (err error) {
 	for i, account := range list.Data {
@@ -162,6 +179,7 @@ func (list *List) Iterate(f IteratorFunc) (err error) {
 	return
 }
 
+// Given a list iterates over each element until no more elements available
 func (list *List) Walk(f IteratorFunc) (err error) {
 	if err = list.Iterate(f); err != nil {
 		return
@@ -177,6 +195,7 @@ func (list *List) Walk(f IteratorFunc) (err error) {
 	return
 }
 
+// Deletes an account with given id and version
 func (client Accounts) Delete(id string, version int) (bool, error) {
-	return client.sdkClient.Delete(deletePath, id, version)
+	return client.sdkClient.Delete(apiPath, id, version)
 }

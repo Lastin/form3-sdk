@@ -65,7 +65,7 @@ func Test_JSONUnmarshal(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := new(Create)
+			result := new(AccountsResponse)
 			err := json.Unmarshal(tt.responseBytes, result)
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -281,7 +281,7 @@ Actually pagination is not working correctly at backend, as proven in given scen
 
 Therefore here we keep querying first page all the time
 */
-func DeleteAll(t *testing.T, client Accounts) {
+func DeleteAll(t *testing.T, client *Accounts) {
 	count := 0
 	deleteFunc := func(_ int, accountData *AccountData) error {
 		success, err := client.Delete(*accountData.Id, accountData.Version)
