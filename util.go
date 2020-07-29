@@ -6,6 +6,8 @@ import (
 	"reflect"
 )
 
+// Function to build filter string from generic struct
+// It uses json tag, as the objects are filtered by attribute with name identical to that provided in json sent back by the API
 func buildFilter(i interface{}) string {
 	if i == nil {
 		return ""

@@ -252,7 +252,7 @@ func CreateBunch(t *testing.T, count int) {
 		{two, one},
 		{two, two},
 	} {
-		_, err := client.Create(&Account{
+		_, err := client.RestMakePostRequest(&Account{
 			Country:                 a1.Country,
 			BaseCurrency:            a1.BaseCurrency,
 			AccountNumber:           v.accountNumber,

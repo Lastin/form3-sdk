@@ -109,7 +109,7 @@ func (client Accounts) Create(account *Account) (result *AccountsResponse, err e
 	var reqB []byte
 	if reqB, err = json.Marshal(account); err == nil {
 		var respB []byte
-		if respB, err = client.sdkClient.Create(apiPath, MsgType, reqB); err == nil {
+		if respB, err = client.sdkClient.RestMakePostRequest(apiPath, MsgType, reqB); err == nil {
 			result = new(AccountsResponse)
 			err = json.Unmarshal(respB, result)
 		}
@@ -144,7 +144,7 @@ func (list List) First() (first *List, err error) {
 	first = new(List)
 	first.sdkClient = list.sdkClient
 	var data []byte
-	if data, err = list.sdkClient.GetPath(*list.Links.First); err == nil {
+	if data, err = list.sdkClient.RestMakeGetRequest(*list.Links.First); err == nil {
 		err = json.Unmarshal(data, first)
 	}
 	return
@@ -156,7 +156,7 @@ func (list List) Next() (next *List, err error) {
 	next.sdkClient = list.sdkClient
 	if list.HasNext() {
 		var data []byte
-		if data, err = list.sdkClient.GetPath(*list.Links.Next); err == nil {
+		if data, err = list.sdkClient.RestMakeGetRequest(*list.Links.Next); err == nil {
 			err = json.Unmarshal(data, next)
 		}
 	} else {
