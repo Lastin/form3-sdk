@@ -3,7 +3,7 @@ package accounts
 import (
 	"encoding/json"
 	"fmt"
-	form3_sdk "github.com/Lastin/form3-sdk"
+	"github.com/Lastin/form3-sdk"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
@@ -79,7 +79,7 @@ func Test_JSONUnmarshal(t *testing.T) {
 
 // Tests creating of the account
 func Test_Create(t *testing.T) {
-	result, err := New(form3_sdk.SessionCofig{}).Create(a1)
+	result, err := New(form3.SessionCofig{}).Create(a1)
 	assert.NoError(t, err)
 	assert.EqualValues(t, &Account{
 		Country:                 a1.Country,
@@ -98,9 +98,9 @@ func Test_Create(t *testing.T) {
 
 // Tests fetching of a freshly created account
 func TestAccounts_Fetch(t *testing.T) {
-	result, err := New(form3_sdk.SessionCofig{}).Create(a1)
+	result, err := New(form3.SessionCofig{}).Create(a1)
 	assert.NoError(t, err)
-	result, err = New(form3_sdk.SessionCofig{}).Fetch(*result.Data.Id)
+	result, err = New(form3.SessionCofig{}).Fetch(*result.Data.Id)
 	assert.NoError(t, err)
 	assert.EqualValues(t, &Account{
 		Country:                 a1.Country,
@@ -119,7 +119,7 @@ func TestAccounts_Fetch(t *testing.T) {
 
 // Tests getting a list of accounts
 func TestAccounts_List(t *testing.T) {
-	client := New(form3_sdk.SessionCofig{})
+	client := New(form3.SessionCofig{})
 	DeleteAll(t, client)
 	CreateBunch(t, 250)
 	/* This is for validating if filter works.
@@ -174,7 +174,7 @@ func TestAccounts_List(t *testing.T) {
 
 // Test walking of the list until the end
 func TestList_Walk(t *testing.T) {
-	client := New(form3_sdk.SessionCofig{})
+	client := New(form3.SessionCofig{})
 	DeleteAll(t, client)
 	CreateBunch(t, 250)
 	list, err := client.List(0, 100, Account{})
@@ -189,7 +189,7 @@ func TestList_Walk(t *testing.T) {
 }
 
 func Test_Delete(t *testing.T) {
-	client := New(form3_sdk.SessionCofig{})
+	client := New(form3.SessionCofig{})
 	DeleteAll(t, client)
 	result, err := client.List(0, 100, Account{})
 	assert.NoError(t, err)
@@ -223,7 +223,7 @@ func Test_Delete(t *testing.T) {
 
 // Helper func for creating desired number of dummy accounts with incremental Ids
 func CreateBunch(t *testing.T, count int) {
-	client := New(form3_sdk.SessionCofig{})
+	client := New(form3.SessionCofig{})
 	for i := 0; i < count; i++ {
 		_, err := client.Create(&Account{
 			Country:                 a1.Country,

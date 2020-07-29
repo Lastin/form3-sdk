@@ -1,4 +1,4 @@
-package form3_sdk
+package form3
 
 import (
 	"bytes"

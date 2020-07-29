@@ -2,7 +2,7 @@ package accounts
 
 import (
 	"encoding/json"
-	form3Sdk "github.com/Lastin/form3-sdk"
+	"github.com/Lastin/form3-sdk"
 )
 
 const (
@@ -12,7 +12,7 @@ const (
 
 // Root struct of this package. Provides range of functions to interact with accounts API
 type Accounts struct {
-	sdkClient *form3Sdk.SdkClient
+	sdkClient *form3.SdkClient
 }
 
 // Represents type of function that needs to be provided to the iterator
@@ -46,7 +46,7 @@ type Links struct {
 // Represents response received by the API when fetching list of accounts
 // Also carries pointer to instance of *form3_sdk.SdkClient used by Next() and First() functions
 type List struct {
-	sdkClient *form3Sdk.SdkClient
+	sdkClient *form3.SdkClient
 	Data      []*AccountData
 	Links     *Links
 }
@@ -98,8 +98,8 @@ type Actor struct {
 }
 
 // Creates a new instance of Accounts which carries instance of form3_sdk.SdkClient with config as provided in the argument
-func New(config form3Sdk.SessionCofig) *Accounts {
-	sdkClient := form3Sdk.New(config)
+func New(config form3.SessionCofig) *Accounts {
+	sdkClient := form3.New(config)
 	return &Accounts{sdkClient: sdkClient}
 }
 
