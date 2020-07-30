@@ -159,8 +159,6 @@ func (list List) Next() (next *List, err error) {
 		if data, err = list.sdkClient.RestMakeGetRequest(*list.Links.Next); err == nil {
 			err = json.Unmarshal(data, next)
 		}
-	} else {
-		next = new(List)
 	}
 	return
 }
